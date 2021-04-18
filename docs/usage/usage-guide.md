@@ -11,7 +11,7 @@ The Redux core library is deliberately unopinionated. It lets you decide how you
 
 This is good in some cases, because it gives you flexibility, but that flexibility isn't always needed. Sometimes we just want the simplest possible way to get started, with some good default behavior out of the box. Or, maybe you're writing a larger application and finding yourself writing some similar code, and you'd like to cut down on how much of that code you have to write by hand.
 
-As described in the [Quick Start](../introduction/quick-start.md) page, the goal of Redux Toolkit is to help simplify common Redux use cases. It is not intended to be a complete solution for everything you might want to do with Redux, but it should make a lot of the Redux-related code you need to write a lot simpler (or in some cases, eliminate some of the hand-written code entirely).
+As described in the [Quick Start](../introduction/getting-started.md) page, the goal of Redux Toolkit is to help simplify common Redux use cases. It is not intended to be a complete solution for everything you might want to do with Redux, but it should make a lot of the Redux-related code you need to write a lot simpler (or in some cases, eliminate some of the hand-written code entirely).
 
 Redux Toolkit exports several individual functions that you can use in your application, and adds dependencies on some other packages that are commonly used with Redux. This lets you decide how to use these in your own application, whether it be a brand new project or updating a large existing app.
 
@@ -84,7 +84,7 @@ import { configureStore } from '@reduxjs/toolkit'
 import rootReducer from './reducers'
 
 const store = configureStore({
-  reducer: rootReducer
+  reducer: rootReducer,
 })
 
 export default store
@@ -93,15 +93,20 @@ export default store
 You can also pass an object full of ["slice reducers"](https://redux.js.org/recipes/structuring-reducers/splitting-reducer-logic), and `configureStore` will call [`combineReducers`](https://redux.js.org/api/combinereducers) for you:
 
 ```js
+import { configureStore } from '@reduxjs/toolkit'
+// highlight-start
 import usersReducer from './usersReducer'
 import postsReducer from './postsReducer'
 
 const store = configureStore({
   reducer: {
     users: usersReducer,
-    posts: postsReducer
-  }
+    posts: postsReducer,
+  },
 })
+// highlight-end
+
+export default store
 ```
 
 Note that this only works for one level of reducers. If you want to nest reducers, you'll need to call `combineReducers` yourself to handle the nesting.
@@ -109,7 +114,7 @@ Note that this only works for one level of reducers. If you want to nest reducer
 If you need to customize the store setup, you can pass additional options. Here's what the hot reloading example might look like using Redux Toolkit:
 
 ```js
-import { configureStore, getDefaultMiddleware } from '@reduxjs/toolkit'
+import { configureStore } from '@reduxjs/toolkit'
 
 import monitorReducersEnhancer from './enhancers/monitorReducers'
 import loggerMiddleware from './middleware/logger'
@@ -118,9 +123,10 @@ import rootReducer from './reducers'
 export default function configureAppStore(preloadedState) {
   const store = configureStore({
     reducer: rootReducer,
-    middleware: [loggerMiddleware, ...getDefaultMiddleware()],
+    middleware: (getDefaultMiddleware) =>
+      getDefaultMiddleware().concat(loggerMiddleware),
     preloadedState,
-    enhancers: [monitorReducersEnhancer]
+    enhancers: [monitorReducersEnhancer],
   })
 
   if (process.env.NODE_ENV !== 'production' && module.hot) {
@@ -131,7 +137,7 @@ export default function configureAppStore(preloadedState) {
 }
 ```
 
-If you provide the `middleware` argument, `configureStore` will only use whatever middleware you've listed. If you want to have some custom middleware _and_ the defaults all together, you can call [`getDefaultMiddleware`](../api/getDefaultMiddleware.md) and include the results in the `middleware` array you provide.
+If you provide the `middleware` argument, `configureStore` will only use whatever middleware you've listed. If you want to have some custom middleware _and_ the defaults all together, you can call [`getDefaultMiddleware`](../api/getDefaultMiddleware.mdx) and include the results in the `middleware` array you provide.
 
 ## Writing Reducers
 
@@ -165,7 +171,7 @@ function todosReducer(state = [], action) {
 
         return {
           ...todo,
-          completed: !todo.completed
+          completed: !todo.completed,
         }
       })
     }
@@ -183,20 +189,21 @@ Notice that we specifically call `state.concat()` to return a copied array with 
 With `createReducer`, we can shorten that example considerably:
 
 ```js
-const todosReducer = createReducer([], {
-  ADD_TODO: (state, action) => {
-    // "mutate" the array by calling push()
-    state.push(action.payload)
-  },
-  TOGGLE_TODO: (state, action) => {
-    const todo = state[action.payload.index]
-    // "mutate" the object by overwriting a field
-    todo.completed = !todo.completed
-  },
-  REMOVE_TODO: (state, action) => {
-    // Can still return an immutably-updated value if we want to
-    return state.filter((todo, i) => i !== action.payload.index)
-  }
+const todosReducer = createReducer([], (builder) => {
+  builder
+    .addCase('ADD_TODO', (state, action) => {
+      // "mutate" the array by calling push()
+      state.push(action.payload)
+    })
+    .addCase('TOGGLE_TODO', (state, action) => {
+      const todo = state[action.payload.index]
+      // "mutate" the object by overwriting a field
+      todo.completed = !todo.completed
+    })
+    .addCase('REMOVE_TODO', (state, action) => {
+      // Can still return an immutably-updated value if we want to
+      return state.filter((todo, i) => i !== action.payload.index)
+    })
 })
 ```
 
@@ -230,30 +237,6 @@ updateValue(state, action) {
 
 Much better!
 
-### Defining Functions in Objects
-
-In modern JavaScript, there are several legal ways to define both keys and functions in an object (and this isn't specific to Redux), and you can mix and match different key definitions and function definitions. For example, these are all legal ways to define a function inside an object:
-
-```js
-const keyName = "ADD_TODO4";
-
-const reducerObject = {
-	// Explicit quotes for the key name, arrow function for the reducer
-	"ADD_TODO1" : (state, action) => { }
-
-	// Bare key with no quotes, function keyword
-	ADD_TODO2 : function(state, action){  }
-
-	// Object literal function shorthand
-	ADD_TODO3(state, action) { }
-
-	// Computed property
-	[keyName] : (state, action) => { }
-}
-```
-
-Using the ["object literal function shorthand"](https://www.sitepoint.com/es6-enhanced-object-literals/) is probably the shortest code, but feel free to use whichever of those approaches you want.
-
 ### Considerations for Using `createReducer`
 
 While the Redux Toolkit `createReducer` function can be really helpful, keep in mind that:
@@ -261,7 +244,7 @@ While the Redux Toolkit `createReducer` function can be really helpful, keep in 
 - The "mutative" code only works correctly inside of our `createReducer` function
 - Immer won't let you mix "mutating" the draft state and also returning a new state value
 
-See the [`createReducer` API reference](../api/createReducer.md) for more details.
+See the [`createReducer` API reference](../api/createReducer.mdx) for more details.
 
 ## Writing Action Creators
 
@@ -273,7 +256,7 @@ Most action creators are very simple. They take some parameters, and return an a
 function addTodo(text) {
   return {
     type: 'ADD_TODO',
-    payload: { text }
+    payload: { text },
   }
 }
 ```
@@ -288,32 +271,34 @@ addTodo({ text: 'Buy milk' })
 // {type : "ADD_TODO", payload : {text : "Buy milk"}})
 ```
 
-`createAction` also accepts a "prepare callback" argument, which allows you to customize the resulting `payload` field and optionally add a `meta` field. See the [`createAction` API reference](../api/createAction.md#using-prepare-callbacks-to-customize-action-contents) for details on defining action creators with a prepare callback.
+`createAction` also accepts a "prepare callback" argument, which allows you to customize the resulting `payload` field and optionally add a `meta` field. See the [`createAction` API reference](../api/createAction.mdx#using-prepare-callbacks-to-customize-action-contents) for details on defining action creators with a prepare callback.
 
 ### Using Action Creators as Action Types
 
 Redux reducers need to look for specific action types to determine how they should update their state. Normally, this is done by defining action type strings and action creator functions separately. Redux Toolkit `createAction` function uses a couple tricks to make this easier.
 
-First, `createAction` overrides the `toString()` method on the action creators it generates. **This means that the action creator itself can be used as the "action type" reference in some places**, such as the keys provided to `createReducer`.
+First, `createAction` overrides the `toString()` method on the action creators it generates. **This means that the action creator itself can be used as the "action type" reference in some places**, such as the keys provided to `builder.addCase` or the `createReducer` object notation.
 
 Second, the action type is also defined as a `type` field on the action creator.
 
 ```js
-const actionCreator = createAction("SOME_ACTION_TYPE");
+const actionCreator = createAction('SOME_ACTION_TYPE')
 
 console.log(actionCreator.toString())
 // "SOME_ACTION_TYPE"
 
-console.log(actionCreator.type);
+console.log(actionCreator.type)
 // "SOME_ACTION_TYPE"
 
-const reducer = createReducer({}, {
-    // actionCreator.toString() will automatically be called here
-    [actionCreator] : (state, action) => {}
+const reducer = createReducer({}, (builder) => {
+  // actionCreator.toString() will automatically be called here
+  // also, if you use TypeScript, the action type will be correctly inferred
+  builder.addCase(actionCreator, (state, action) => {})
 
-    // Or, you can reference the .type field:
-    [actionCreator.type] : (state, action) => { }
-});
+  // Or, you can reference the .type field:
+  // if using TypeScript, the action type cannot be inferred that way
+  builder.addCase(actionCreator.type, (state, action) => {})
+})
 ```
 
 This means you don't have to write or use a separate action type variable, or repeat the name and value of an action type like `const SOME_ACTION_TYPE = "SOME_ACTION_TYPE"`.
@@ -354,7 +339,7 @@ import postsReducer from './postsReducer'
 
 const rootReducer = combineReducers({
   users: usersReducer,
-  posts: postsReducer
+  posts: postsReducer,
 })
 ```
 
@@ -378,7 +363,7 @@ import { CREATE_POST, UPDATE_POST, DELETE_POST } from './postConstants'
 export function addPost(id, title) {
   return {
     type: CREATE_POST,
-    payload: { id, title }
+    payload: { id, title },
   }
 }
 
@@ -415,7 +400,7 @@ const DELETE_POST = 'DELETE_POST'
 export function addPost(id, title) {
   return {
     type: CREATE_POST,
-    payload: { id, title }
+    payload: { id, title },
   }
 }
 
@@ -435,6 +420,30 @@ export default function postsReducer(state = initialState, action) {
 
 That simplifies things because we don't need to have multiple files, and we can remove the redundant imports of the action type constants. But, we still have to write the action types and the action creators by hand.
 
+### Defining Functions in Objects
+
+In modern JavaScript, there are several legal ways to define both keys and functions in an object (and this isn't specific to Redux), and you can mix and match different key definitions and function definitions. For example, these are all legal ways to define a function inside an object:
+
+```js
+const keyName = "ADD_TODO4";
+
+const reducerObject = {
+	// Explicit quotes for the key name, arrow function for the reducer
+	"ADD_TODO1" : (state, action) => { }
+
+	// Bare key with no quotes, function keyword
+	ADD_TODO2 : function(state, action){  }
+
+	// Object literal function shorthand
+	ADD_TODO3(state, action) { }
+
+	// Computed property
+	[keyName] : (state, action) => { }
+}
+```
+
+Using the ["object literal function shorthand"](https://www.sitepoint.com/es6-enhanced-object-literals/) is probably the shortest code, but feel free to use whichever of those approaches you want.
+
 ### Simplifying Slices with `createSlice`
 
 To simplify this process, Redux Toolkit includes a `createSlice` function that will auto-generate the action types and action creators for you, based on the names of the reducer functions you provide.
@@ -448,8 +457,8 @@ const postsSlice = createSlice({
   reducers: {
     createPost(state, action) {},
     updatePost(state, action) {},
-    deletePost(state, action) {}
-  }
+    deletePost(state, action) {},
+  },
 })
 
 console.log(postsSlice)
@@ -480,8 +489,8 @@ const postsSlice = createSlice({
   reducers: {
     createPost(state, action) {},
     updatePost(state, action) {},
-    deletePost(state, action) {}
-  }
+    deletePost(state, action) {},
+  },
 })
 
 const { createPost } = postsSlice.actions
@@ -501,8 +510,8 @@ const postsSlice = createSlice({
   reducers: {
     createPost(state, action) {},
     updatePost(state, action) {},
-    deletePost(state, action) {}
-  }
+    deletePost(state, action) {},
+  },
 })
 
 // Extract the action creators object and the reducer
@@ -523,7 +532,7 @@ Second, **JS modules can have "circular reference" problems if two modules try t
 
 This CodeSandbox example demonstrates the problem:
 
-<iframe src="https://codesandbox.io/embed/rw7ppj4z0m" style={{ width: '100%', height: '500px', border: 0, borderRadius: '4px', overflow: 'hidden' }} sandbox="allow-modals allow-forms allow-popups allow-scripts allow-same-origin"></iframe>
+<iframe src="https://codesandbox.io/embed/rw7ppj4z0m/?runonclick=1" style={{ width: '100%', height: '500px', border: 0, borderRadius: '4px', overflow: 'hidden' }} sandbox="allow-modals allow-forms allow-popups allow-scripts allow-same-origin"></iframe>
 
 If you encounter this, you may need to restructure your code in a way that avoids the circular references. This will usually require extracting shared code to a separate common file that both modules can import and use. In this case, you might define some common action types in a separate file using `createAction`, import those action creators into each slice file, and handle them using the `extraReducers` argument.
 
@@ -554,7 +563,7 @@ There are many kinds of async middleware for Redux, and each lets you write your
 
 **We recommend [using the Redux Thunk middleware as the standard approach](https://github.com/reduxjs/redux-thunk)**, as it is sufficient for most typical use cases (such as basic AJAX data fetching). In addition, use of the `async/await` syntax in thunks makes them easier to read.
 
-**The Redux Toolkit `configureStore` function [automatically sets up the thunk middleware by default](../api/getDefaultMiddleware.md)**, so you can immediately start writing thunks as part of your application code.
+**The Redux Toolkit `configureStore` function [automatically sets up the thunk middleware by default](../api/getDefaultMiddleware.mdx)**, so you can immediately start writing thunks as part of your application code.
 
 ### Defining Async Logic in Slices
 
@@ -574,7 +583,7 @@ const usersSlice = createSlice({
   name: 'users',
   initialState: {
     loading: 'idle',
-    users: []
+    users: [],
   },
   reducers: {
     usersLoading(state, action) {
@@ -588,15 +597,15 @@ const usersSlice = createSlice({
         state.loading = 'idle'
         state.users = action.payload
       }
-    }
-  }
+    },
+  },
 })
 
 // Destructure and export the plain action creators
 export const { usersLoading, usersReceived } = usersSlice.actions
 
 // Define a thunk that dispatches those action creators
-const fetchUsers = () => async dispatch => {
+const fetchUsers = () => async (dispatch) => {
   dispatch(usersLoading())
   const response = await usersAPI.fetchAll()
   dispatch(usersReceived(response.data))
@@ -677,8 +686,8 @@ const usersSlice = createSlice({
     [fetchUserById.fulfilled]: (state, action) => {
       // Add user to the state array
       state.entities.push(action.payload)
-    }
-  }
+    },
+  },
 })
 
 // Later, dispatch the thunk as needed in the app
@@ -722,10 +731,10 @@ export const slice = createSlice({
   name: 'users',
   initialState: {
     ids: [],
-    entities: {}
+    entities: {},
   },
   reducers: {},
-  extraReducers: builder => {
+  extraReducers: (builder) => {
     builder.addCase(fetchUsers.fulfilled, (state, action) => {
       // reduce the collection by the id property into a shape of { 1: { ...user }}
       const byId = action.payload.users.reduce((byId, user) => {
@@ -735,7 +744,7 @@ export const slice = createSlice({
       state.entities = byId
       state.ids = Object.keys(byId)
     })
-  }
+  },
 })
 ```
 
@@ -764,15 +773,15 @@ export const slice = createSlice({
   name: 'users',
   initialState: {
     ids: [],
-    entities: {}
+    entities: {},
   },
   reducers: {},
-  extraReducers: builder => {
+  extraReducers: (builder) => {
     builder.addCase(fetchUsers.fulfilled, (state, action) => {
       state.entities = action.payload.users
       state.ids = Object.keys(action.payload.users)
     })
-  }
+  },
 })
 ```
 
@@ -786,7 +795,7 @@ Redux Toolkit's `createEntityAdapter` API provides a standardized way to store y
 import {
   createSlice,
   createAsyncThunk,
-  createEntityAdapter
+  createEntityAdapter,
 } from '@reduxjs/toolkit'
 import userAPI from './userAPI'
 
@@ -797,7 +806,7 @@ export const fetchUsers = createAsyncThunk('users/fetchAll', async () => {
   return response.data
 })
 
-export const updateUser = createAsyncThunk('users/updateOne', async arg => {
+export const updateUser = createAsyncThunk('users/updateOne', async (arg) => {
   const response = await userAPI.updateUser(arg)
   // In this case, `response.data` would be:
   // { id: 1, first_name: 'Example', last_name: 'UpdatedLastName'}
@@ -815,15 +824,15 @@ export const slice = createSlice({
   name: 'users',
   initialState,
   reducers: {
-    removeUser: usersAdapter.removeOne
+    removeUser: usersAdapter.removeOne,
   },
-  extraReducers: builder => {
+  extraReducers: (builder) => {
     builder.addCase(fetchUsers.fulfilled, usersAdapter.upsertMany)
     builder.addCase(updateUser.fulfilled, (state, { payload }) => {
       const { id, ...changes } = payload
       usersAdapter.updateOne(state, { id, changes })
     })
-  }
+  },
 })
 
 const reducer = slice.reducer
@@ -846,7 +855,7 @@ import {
   createSlice,
   createEntityAdapter,
   createAsyncThunk,
-  createSelector
+  createSelector,
 } from '@reduxjs/toolkit'
 import fakeAPI from '../../services/fakeAPI'
 import { normalize, schema } from 'normalizr'
@@ -854,18 +863,18 @@ import { normalize, schema } from 'normalizr'
 // Define normalizr entity schemas
 export const userEntity = new schema.Entity('users')
 export const commentEntity = new schema.Entity('comments', {
-  commenter: userEntity
+  commenter: userEntity,
 })
 export const articleEntity = new schema.Entity('articles', {
   author: userEntity,
-  comments: [commentEntity]
+  comments: [commentEntity],
 })
 
 const articlesAdapter = createEntityAdapter()
 
 export const fetchArticle = createAsyncThunk(
   'articles/fetchArticle',
-  async id => {
+  async (id) => {
     const data = await fakeAPI.articles.show(id)
     // Normalize the data so reducers can load a predictable payload, like:
     // `action.payload = { users: {}, articles: {}, comments: {} }`
@@ -882,8 +891,8 @@ export const slice = createSlice({
     [fetchArticle.fulfilled]: (state, action) => {
       // Handle the fetch result by inserting the articles here
       articlesAdapter.upsertMany(state, action.payload.articles)
-    }
-  }
+    },
+  },
 })
 
 const reducer = slice.reducer
@@ -900,12 +909,12 @@ export const slice = createSlice({
   name: 'users',
   initialState: usersAdapter.getInitialState(),
   reducers: {},
-  extraReducers: builder => {
+  extraReducers: (builder) => {
     builder.addCase(fetchArticle.fulfilled, (state, action) => {
       // And handle the same fetch result by inserting the users here
       usersAdapter.upsertMany(state, action.payload.users)
     })
-  }
+  },
 })
 
 const reducer = slice.reducer
@@ -926,8 +935,8 @@ export const slice = createSlice({
     [fetchArticle.fulfilled]: (state, action) => {
       // Same for the comments
       commentsAdapter.upsertMany(state, action.payload.comments)
-    }
-  }
+    },
+  },
 })
 
 const reducer = slice.reducer
@@ -947,8 +956,8 @@ export const {
   selectIds: selectUserIds,
   selectEntities: selectUserEntities,
   selectAll: selectAllUsers,
-  selectTotal: selectTotalUsers
-} = usersAdapter.getSelectors(state => state.users)
+  selectTotal: selectTotalUsers,
+} = usersAdapter.getSelectors((state) => state.users)
 ```
 
 You could then use these selectors in a component like this:
@@ -970,7 +979,7 @@ export function UsersList() {
         There are <span className={styles.value}>{count}</span> users.{' '}
         {count === 0 && `Why don't you fetch some more?`}
       </div>
-      {users.map(user => (
+      {users.map((user) => (
         <div key={user.id}>
           <div>{`${user.first_name} ${user.last_name}`}</div>
         </div>
@@ -989,14 +998,14 @@ By default, `createEntityAdapter` assumes that your data has unique IDs in an `e
 const userData = {
   users: [
     { idx: 1, first_name: 'Test' },
-    { idx: 2, first_name: 'Two' }
-  ]
+    { idx: 2, first_name: 'Two' },
+  ],
 }
 
 // Since our primary key is `idx` and not `id`,
 // pass in an ID selector to return that field instead
 export const usersAdapter = createEntityAdapter({
-  selectId: user => user.idx
+  selectId: (user) => user.idx,
 })
 ```
 
@@ -1009,8 +1018,8 @@ export const usersAdapter = createEntityAdapter({
 const userData = {
   users: [
     { id: 1, first_name: 'Test' },
-    { id: 2, first_name: 'Banana' }
-  ]
+    { id: 2, first_name: 'Banana' },
+  ],
 }
 
 // Sort by `first_name`. `state.ids` would be ordered as
@@ -1018,7 +1027,7 @@ const userData = {
 // When using the provided `selectAll` selector, the result would be sorted:
 // [{ id: 2, first_name: 'Banana' }, { id: 1, first_name: 'Test' }]
 export const usersAdapter = createEntityAdapter({
-  sortComparer: (a, b) => a.first_name.localeCompare(b.first_name)
+  sortComparer: (a, b) => a.first_name.localeCompare(b.first_name),
 })
 ```
 
@@ -1028,7 +1037,7 @@ One of the core usage principles for Redux is that [you should not put non-seria
 
 However, like most rules, there are exceptions. There may be occasions when you have to deal with actions that need to accept non-serializable data. This should be done very rarely and only if necessary, and these non-serializable payloads shouldn't ever make it into your application state through a reducer.
 
-The [serializability dev check middleware](../api/getDefaultMiddleware.md) will automatically warn anytime it detects non-serializable values in your actions or state. We encourage you to leave this middleware active to help avoid accidentally making mistakes. However, if you _do_ need to turnoff those warnings, you can customize the middleware by configuring it to ignore specific action types, or fields in actions and state:
+The [serializability dev check middleware](../api/getDefaultMiddleware.mdx) will automatically warn anytime it detects non-serializable values in your actions or state. We encourage you to leave this middleware active to help avoid accidentally making mistakes. However, if you _do_ need to turnoff those warnings, you can customize the middleware by configuring it to ignore specific action types, or fields in actions and state:
 
 ```js
 configureStore({
@@ -1040,9 +1049,9 @@ configureStore({
       // Ignore these field paths in all actions
       ignoredActionPaths: ['meta.arg', 'payload.timestamp'],
       // Ignore these paths in the state
-      ignoredPaths: ['items.dates']
-    }
-  })
+      ignoredPaths: ['items.dates'],
+    },
+  }),
 })
 ```
 
@@ -1060,7 +1069,7 @@ import {
   PAUSE,
   PERSIST,
   PURGE,
-  REGISTER
+  REGISTER,
 } from 'redux-persist'
 import storage from 'redux-persist/lib/storage'
 import { PersistGate } from 'redux-persist/integration/react'
@@ -1071,7 +1080,7 @@ import rootReducer from './reducers'
 const persistConfig = {
   key: 'root',
   version: 1,
-  storage
+  storage,
 }
 
 const persistedReducer = persistReducer(persistConfig, rootReducer)
@@ -1080,9 +1089,9 @@ const store = configureStore({
   reducer: persistedReducer,
   middleware: getDefaultMiddleware({
     serializableCheck: {
-      ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER]
-    }
-  })
+      ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
+    },
+  }),
 })
 
 let persistor = persistStore(store)
@@ -1106,41 +1115,36 @@ RRF includes timestamp values in most actions and state as of 3.x, but there are
 A possible configuration to work with that behavior could look like:
 
 ```ts
-import { configureStore, getDefaultMiddleware } from '@reduxjs/toolkit'
+import { configureStore } from '@reduxjs/toolkit'
 import {
   getFirebase,
-  actionTypes as rrfActionTypes
+  actionTypes as rrfActionTypes,
 } from 'react-redux-firebase'
 import { constants as rfConstants } from 'redux-firestore'
 import rootReducer from './rootReducer'
 
-const extraArgument = {
-  getFirebase
-}
-
-const middleware = [
-  ...getDefaultMiddleware({
-    serializableCheck: {
-      ignoredActions: [
-        // just ignore every redux-firebase and react-redux-firebase action type
-        ...Object.keys(rfConstants.actionTypes).map(
-          type => `${rfConstants.actionsPrefix}/${type}`
-        ),
-        ...Object.keys(rrfActionTypes).map(
-          type => `@@reactReduxFirebase/${type}`
-        )
-      ],
-      ignoredPaths: ['firebase', 'firestore']
-    },
-    thunk: {
-      extraArgument
-    }
-  })
-]
-
 const store = configureStore({
   reducer: rootReducer,
-  middleware
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: [
+          // just ignore every redux-firebase and react-redux-firebase action type
+          ...Object.keys(rfConstants.actionTypes).map(
+            (type) => `${rfConstants.actionsPrefix}/${type}`
+          ),
+          ...Object.keys(rrfActionTypes).map(
+            (type) => `@@reactReduxFirebase/${type}`
+          ),
+        ],
+        ignoredPaths: ['firebase', 'firestore'],
+      },
+      thunk: {
+        extraArgument: {
+          getFirebase,
+        },
+      },
+    }),
 })
 
 export default store

@@ -3,7 +3,7 @@ import {
   IsUnknownOrNonInferrable,
   IfMaybeUndefined,
   IfVoid,
-  IsAny
+  IsAny,
 } from './tsHelpers'
 import isPlainObject from './isPlainObject'
 
@@ -229,7 +229,7 @@ export type PayloadActionCreator<
  *
  * @param type The action type to use for created actions.
  * @param prepare (optional) a method that takes any number of arguments and returns { payload } or { payload, meta }.
- *                If this is given, the resulting action creator will pass it's arguments to this method to calculate payload & meta.
+ *                If this is given, the resulting action creator will pass its arguments to this method to calculate payload & meta.
  *
  * @public
  */
@@ -246,7 +246,7 @@ export function createAction<P = void, T extends string = string>(
  *
  * @param type The action type to use for created actions.
  * @param prepare (optional) a method that takes any number of arguments and returns { payload } or { payload, meta }.
- *                If this is given, the resulting action creator will pass it's arguments to this method to calculate payload & meta.
+ *                If this is given, the resulting action creator will pass its arguments to this method to calculate payload & meta.
  *
  * @public
  */
@@ -270,7 +270,7 @@ export function createAction(type: string, prepareAction?: Function): any {
         type,
         payload: prepared.payload,
         ...('meta' in prepared && { meta: prepared.meta }),
-        ...('error' in prepared && { error: prepared.error })
+        ...('error' in prepared && { error: prepared.error }),
       }
     }
     return { type, payload: args[0] }

@@ -1,7 +1,7 @@
 import {
   createAsyncThunk,
   miniSerializeError,
-  unwrapResult
+  unwrapResult,
 } from './createAsyncThunk'
 import { configureStore } from './configureStore'
 import { AnyAction } from 'redux'
@@ -9,7 +9,7 @@ import { AnyAction } from 'redux'
 import {
   mockConsole,
   createConsole,
-  getLog
+  getLog,
 } from 'console-testing-library/pure'
 
 declare global {
@@ -43,7 +43,7 @@ describe('createAsyncThunk', () => {
     }
 
     const store = configureStore({
-      reducer
+      reducer,
     })
 
     // reset from however many times the store called it
@@ -74,7 +74,12 @@ describe('createAsyncThunk', () => {
 
     const thunkFunction = thunkActionCreator(args)
 
-    await thunkFunction(dispatch, () => {}, undefined)
+    const thunkPromise = thunkFunction(dispatch, () => {}, undefined)
+
+    expect(thunkPromise.requestId).toBe(generatedRequestId)
+    expect(thunkPromise.arg).toBe(args)
+
+    await thunkPromise
 
     expect(passedArg).toBe(args)
 
@@ -169,7 +174,7 @@ describe('createAsyncThunk', () => {
     const errorObject = {
       name: 'Custom thrown error',
       message: 'This is not necessary',
-      code: '400'
+      code: '400',
     }
 
     const thunkActionCreator = createAsyncThunk(
@@ -212,8 +217,8 @@ describe('createAsyncThunk', () => {
         'I am a fake server-provided 400 payload with validation details',
       errors: [
         { field_one: 'Must be a string' },
-        { field_two: 'Must be a number' }
-      ]
+        { field_two: 'Must be a number' },
+      ],
     }
 
     const thunkActionCreator = createAsyncThunk(
@@ -259,8 +264,8 @@ describe('createAsyncThunk', () => {
         'I am a fake server-provided 400 payload with validation details',
       errors: [
         { field_one: 'Must be a string' },
-        { field_two: 'Must be a number' }
-      ]
+        { field_two: 'Must be a number' },
+      ],
     }
 
     const thunkActionCreator = createAsyncThunk(
@@ -302,37 +307,37 @@ describe('createAsyncThunk', () => {
 })
 
 describe('createAsyncThunk with abortController', () => {
-  const asyncThunk = createAsyncThunk('test', function abortablePayloadCreator(
-    _: any,
-    { signal }
-  ) {
-    return new Promise((resolve, reject) => {
-      if (signal.aborted) {
-        reject(
-          new DOMException(
-            'This should never be reached as it should already be handled.',
-            'AbortError'
+  const asyncThunk = createAsyncThunk(
+    'test',
+    function abortablePayloadCreator(_: any, { signal }) {
+      return new Promise((resolve, reject) => {
+        if (signal.aborted) {
+          reject(
+            new DOMException(
+              'This should never be reached as it should already be handled.',
+              'AbortError'
+            )
           )
-        )
-      }
-      signal.addEventListener('abort', () => {
-        reject(new DOMException('Was aborted while running', 'AbortError'))
+        }
+        signal.addEventListener('abort', () => {
+          reject(new DOMException('Was aborted while running', 'AbortError'))
+        })
+        setTimeout(resolve, 100)
       })
-      setTimeout(resolve, 100)
-    })
-  })
+    }
+  )
 
   let store = configureStore({
     reducer(store: AnyAction[] = []) {
       return store
-    }
+    },
   })
 
   beforeEach(() => {
     store = configureStore({
       reducer(store: AnyAction[] = [], action) {
         return [...store, action]
-      }
+      },
     })
   })
 
@@ -341,7 +346,7 @@ describe('createAsyncThunk with abortController', () => {
     expect(store.getState()).toEqual([
       expect.any(Object),
       expect.objectContaining({ type: 'test/pending' }),
-      expect.objectContaining({ type: 'test/fulfilled' })
+      expect.objectContaining({ type: 'test/fulfilled' }),
     ])
   })
 
@@ -353,15 +358,16 @@ describe('createAsyncThunk with abortController', () => {
       type: 'test/rejected',
       error: {
         message: 'AbortReason',
-        name: 'AbortError'
+        name: 'AbortError',
       },
-      meta: { aborted: true }
+      meta: { aborted: true, requestId: promise.requestId },
     }
+
     // abortedAction with reason is dispatched after test/pending is dispatched
     expect(store.getState()).toMatchObject([
       {},
       { type: 'test/pending' },
-      expectedAbortedAction
+      expectedAbortedAction,
     ])
 
     // same abortedAction is returned, but with the AbortError from the abortablePayloadCreator
@@ -375,7 +381,7 @@ describe('createAsyncThunk with abortController', () => {
 
   test('even when the payloadCreator does not directly support the signal, no further actions are dispatched', async () => {
     const unawareAsyncThunk = createAsyncThunk('unaware', async () => {
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
       return 'finished'
     })
 
@@ -387,15 +393,15 @@ describe('createAsyncThunk with abortController', () => {
       type: 'unaware/rejected',
       error: {
         message: 'AbortReason',
-        name: 'AbortError'
-      }
+        name: 'AbortError',
+      },
     }
 
     // abortedAction with reason is dispatched after test/pending is dispatched
     expect(store.getState()).toEqual([
       expect.any(Object),
       expect.objectContaining({ type: 'unaware/pending' }),
-      expect.objectContaining(expectedAbortedAction)
+      expect.objectContaining(expectedAbortedAction),
     ])
 
     // same abortedAction is returned, but with the AbortError from the abortablePayloadCreator
@@ -411,7 +417,7 @@ describe('createAsyncThunk with abortController', () => {
     let running = false
     const longRunningAsyncThunk = createAsyncThunk('longRunning', async () => {
       running = true
-      await new Promise(resolve => setTimeout(resolve, 30000))
+      await new Promise((resolve) => setTimeout(resolve, 30000))
       running = false
     })
 
@@ -423,7 +429,7 @@ describe('createAsyncThunk with abortController', () => {
     expect(result).toMatchObject({
       type: 'longRunning/rejected',
       error: { message: 'Aborted', name: 'AbortError' },
-      meta: { aborted: true }
+      meta: { aborted: true },
     })
   })
 
@@ -435,7 +441,7 @@ describe('createAsyncThunk with abortController', () => {
 
     beforeEach(() => {
       keepAbortController = window.AbortController
-      delete window.AbortController
+      delete (window as any).AbortController
       jest.resetModules()
       freshlyLoadedModule = require('./createAsyncThunk')
       restore = mockConsole(createConsole())
@@ -454,7 +460,7 @@ describe('createAsyncThunk with abortController', () => {
       const longRunningAsyncThunk = freshlyLoadedModule.createAsyncThunk(
         'longRunning',
         async () => {
-          await new Promise(resolve => setTimeout(resolve, 30000))
+          await new Promise((resolve) => setTimeout(resolve, 30000))
         }
       )
 
@@ -476,7 +482,7 @@ test('non-serializable arguments are ignored by serializableStateInvariantMiddle
   const asyncThunk = createAsyncThunk('test', (arg: Map<any, any>) => {})
 
   configureStore({
-    reducer: () => 0
+    reducer: () => 0,
   }).dispatch(asyncThunk(nonSerializableValue))
 
   expect(getLog().log).toMatchInlineSnapshot(`""`)
@@ -551,12 +557,12 @@ describe('conditional skipping of asyncThunks', () => {
 
   test('does not fail when attempting to abort a canceled promise', async () => {
     const asyncPayloadCreator = jest.fn(async (x: typeof arg) => {
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise((resolve) => setTimeout(resolve, 2000))
       return 10
     })
 
     const asyncThunk = createAsyncThunk('test', asyncPayloadCreator, {
-      condition
+      condition,
     })
     const promise = asyncThunk(arg)(dispatch, getState, extra)
     promise.abort(
@@ -567,7 +573,7 @@ describe('conditional skipping of asyncThunks', () => {
   test('rejected action can be dispatched via option', async () => {
     const asyncThunk = createAsyncThunk('test', payloadCreator, {
       condition,
-      dispatchConditionRejection: true
+      dispatchConditionRejection: true,
     })
     await asyncThunk(arg)(dispatch, getState, extra)
 
@@ -576,17 +582,163 @@ describe('conditional skipping of asyncThunks', () => {
       expect.objectContaining({
         error: {
           message: 'Aborted due to condition callback returning false.',
-          name: 'ConditionError'
+          name: 'ConditionError',
         },
         meta: {
           aborted: false,
           arg: arg,
+          rejectedWithValue: false,
           condition: true,
-          requestId: expect.stringContaining('')
+          requestId: expect.stringContaining(''),
+          requestStatus: 'rejected',
         },
         payload: undefined,
-        type: 'test/rejected'
+        type: 'test/rejected',
       })
+    )
+  })
+
+  test('serializeError implementation', async () => {
+    function serializeError() {
+      return 'serialized!'
+    }
+    const errorObject = 'something else!'
+
+    const store = configureStore({
+      reducer: (state = [], action) => [...state, action],
+    })
+
+    const asyncThunk = createAsyncThunk<
+      unknown,
+      void,
+      { serializedErrorType: string }
+    >('test', () => Promise.reject(errorObject), { serializeError })
+    const rejected = await store.dispatch(asyncThunk())
+    if (!asyncThunk.rejected.match(rejected)) {
+      throw new Error()
+    }
+
+    const expectation = {
+      type: 'test/rejected',
+      payload: undefined,
+      error: 'serialized!',
+      meta: expect.any(Object),
+    }
+    expect(rejected).toEqual(expectation)
+    expect(store.getState()[2]).toEqual(expectation)
+    expect(rejected.error).not.toEqual(miniSerializeError(errorObject))
+  })
+})
+describe('unwrapResult', () => {
+  const getState = jest.fn(() => ({}))
+  const dispatch = jest.fn((x: any) => x)
+  const extra = {}
+  test('fulfilled case', async () => {
+    const asyncThunk = createAsyncThunk('test', () => {
+      return 'fulfilled!' as const
+    })
+
+    const unwrapPromise = asyncThunk()(dispatch, getState, extra).then(
+      unwrapResult
+    )
+
+    await expect(unwrapPromise).resolves.toBe('fulfilled!')
+
+    const unwrapPromise2 = asyncThunk()(dispatch, getState, extra)
+    const res = await unwrapPromise2.unwrap()
+    expect(res).toBe('fulfilled!')
+  })
+  test('error case', async () => {
+    const error = new Error('Panic!')
+    const asyncThunk = createAsyncThunk('test', () => {
+      throw error
+    })
+
+    const unwrapPromise = asyncThunk()(dispatch, getState, extra).then(
+      unwrapResult
+    )
+
+    await expect(unwrapPromise).rejects.toEqual(miniSerializeError(error))
+
+    const unwrapPromise2 = asyncThunk()(dispatch, getState, extra)
+    await expect(unwrapPromise2.unwrap()).rejects.toEqual(
+      miniSerializeError(error)
+    )
+  })
+  test('rejectWithValue case', async () => {
+    const asyncThunk = createAsyncThunk('test', (_, { rejectWithValue }) => {
+      return rejectWithValue('rejectWithValue!')
+    })
+
+    const unwrapPromise = asyncThunk()(dispatch, getState, extra).then(
+      unwrapResult
+    )
+
+    await expect(unwrapPromise).rejects.toBe('rejectWithValue!')
+
+    const unwrapPromise2 = asyncThunk()(dispatch, getState, extra)
+    await expect(unwrapPromise2.unwrap()).rejects.toBe('rejectWithValue!')
+  })
+})
+
+describe('idGenerator option', () => {
+  const getState = () => ({})
+  const dispatch = (x: any) => x
+  const extra = {}
+
+  test('idGenerator implementation - can customizes how request IDs are generated', async () => {
+    function makeFakeIdGenerator() {
+      let id = 0
+      return jest.fn(() => {
+        id++
+        return `fake-random-id-${id}`
+      })
+    }
+
+    let generatedRequestId = ''
+
+    const idGenerator = makeFakeIdGenerator()
+    const asyncThunk = createAsyncThunk(
+      'test',
+      async (args: void, { requestId }) => {
+        generatedRequestId = requestId
+      },
+      { idGenerator }
+    )
+
+    // dispatching the thunks should be using the custom id generator
+    const promise0 = asyncThunk()(dispatch, getState, extra)
+    expect(generatedRequestId).toEqual('fake-random-id-1')
+    expect(promise0.requestId).toEqual('fake-random-id-1')
+    expect((await promise0).meta.requestId).toEqual('fake-random-id-1')
+
+    const promise1 = asyncThunk()(dispatch, getState, extra)
+    expect(generatedRequestId).toEqual('fake-random-id-2')
+    expect(promise1.requestId).toEqual('fake-random-id-2')
+    expect((await promise1).meta.requestId).toEqual('fake-random-id-2')
+
+    const promise2 = asyncThunk()(dispatch, getState, extra)
+    expect(generatedRequestId).toEqual('fake-random-id-3')
+    expect(promise2.requestId).toEqual('fake-random-id-3')
+    expect((await promise2).meta.requestId).toEqual('fake-random-id-3')
+
+    generatedRequestId = ''
+    const defaultAsyncThunk = createAsyncThunk(
+      'test',
+      async (args: void, { requestId }) => {
+        generatedRequestId = requestId
+      }
+    )
+    // dispatching the default options thunk should still generate an id,
+    // but not using the custom id generator
+    const promise3 = defaultAsyncThunk()(dispatch, getState, extra)
+    expect(generatedRequestId).toEqual(promise3.requestId)
+    expect(promise3.requestId).not.toEqual('')
+    expect(promise3.requestId).not.toEqual(
+      expect.stringContaining('fake-random-id')
+    )
+    expect((await promise3).meta.requestId).not.toEqual(
+      expect.stringContaining('fake-fandom-id')
     )
   })
 })

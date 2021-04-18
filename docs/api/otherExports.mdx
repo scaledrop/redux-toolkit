@@ -1,0 +1,96 @@
+---
+id: other-exports
+title: Other Exports
+sidebar_label: Other Exports
+hide_title: true
+---
+
+# Other Exports
+
+Redux Toolkit exports some of its internal utilities, and re-exports additional functions from other dependencies as well.
+
+### `nanoid`
+
+An inlined copy of [`nanoid/nonsecure`](https://github.com/ai/nanoid). Generates a non-cryptographically-secure random ID string. `createAsyncThunk` uses this by default for request IDs. May also be useful for other cases as well.
+
+```ts
+import { nanoid } from '@reduxjs/toolkit'
+
+console.log(nanoid())
+// 'dgPXxUz_6fWIQBD8XmiSy'
+```
+
+### `miniSerializeError`
+
+A re-worked, inlined copy of [`serialize-error`](https://github.com/sindresorhus/serialize-error). Serializes an error into a plain object. `createAsyncThunk` uses this by default for rejected cases. May also be useful other other cases as well.  
+
+Returns a plain object with optional `name`, `message`, `stack` and `code` properties.
+
+```ts
+import { miniSerializeError } from '@reduxjs/toolkit'
+
+const serializedError = miniSerializeError(new Error('Something has gone wrong'))
+console.log(serializedError.name)
+// "Error"
+console.log(serializedError.message)
+// "Something has gone wrong"
+console.log(serializedError.stack)
+// "Error: Something has gone wrong↵    at <anonymous>:24:34"
+```
+
+## Exports from Other Libraries
+
+### `createNextState`
+
+The default immutable update function from the [`immer` library](https://immerjs.github.io/immer/), re-exported here as `createNextState` (also commonly referred to as [`produce`](https://immerjs.github.io/immer/produce))
+
+### `current`
+
+[The `current` function](https://immerjs.github.io/immer/current) from the [`immer` library](https://immerjs.github.io/immer/), which takes a snapshot of the current state of a draft and finalizes it (but without freezing). Current is a great utility to print the current state during debugging, and the output of `current` can also be safely leaked outside the producer.
+
+### `original`
+
+[The `original` function](https://immerjs.github.io/immer/original) from the [`immer` library](https://immerjs.github.io/immer/), which returns the original object. This is particularly useful for referential equality check in reducers.
+
+```ts
+import { createReducer, createAction, current } from '@reduxjs/toolkit'
+
+interface Todo {
+  //...
+}
+const addTodo = createAction<Todo>('addTodo')
+
+const initialState = [] as Todo[]
+
+const todosReducer = createReducer(initialState, builder => {
+  builder.addCase(addTodo, (state, action) => {
+    state.push(action.payload)
+    console.log(current(state))
+  })
+})
+```
+
+### `isDraft`
+
+[The `isDraft` function](https://immerjs.github.io/immer/original) from the [`immer` library](https://immerjs.github.io/immer/), which checks to see if a given value is a Proxy-wrapped "draft" state.
+
+### `combineReducers`
+
+Redux's [`combineReducers`](https://redux.js.org/api/combinereducers), re-exported for convenience. While `configureStore` calls this internally, you may wish to call it yourself to compose multiple levels of slice reducers.
+
+### `compose`
+
+Redux's [`compose`](https://redux.js.org/api/compose). It composes functions from right to left.
+This is a functional programming utility. You might want to use it to apply several store custom enhancers/ functions in a row.
+
+### `bindActionCreators`
+
+Redux's [`bindActionCreators`](https://redux.js.org/api/bindactioncreators). It wraps action creators with `dispatch()` so that they dispatch immediately when called.
+
+### `createStore`
+
+Redux's [`createStore`](https://redux.js.org/api/createstore). You should not need to use this directly.
+
+### `applyMiddleware`
+
+Redux's [`applyMiddleware`](https://redux.js.org/api/applymiddleware). You should not need to use this directly.

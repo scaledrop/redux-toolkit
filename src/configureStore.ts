@@ -10,21 +10,22 @@ import {
   AnyAction,
   StoreEnhancer,
   Store,
-  DeepPartial,
-  Dispatch
+  Dispatch,
+  PreloadedState,
+  CombinedState,
 } from 'redux'
 import {
   composeWithDevTools,
-  EnhancerOptions as DevToolsOptions
+  EnhancerOptions as DevToolsOptions,
 } from './devtoolsExtension'
 
 import isPlainObject from './isPlainObject'
 import {
   ThunkMiddlewareFor,
   curryGetDefaultMiddleware,
-  CurriedGetDefaultMiddleware
+  CurriedGetDefaultMiddleware,
 } from './getDefaultMiddleware'
-import { DispatchForMiddlewares } from './tsHelpers'
+import { DispatchForMiddlewares, NoInfer } from './tsHelpers'
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 
@@ -74,11 +75,16 @@ export interface ConfigureStoreOptions<
    * function (either directly or indirectly by passing an object as `reducer`),
    * this must be an object with the same shape as the reducer map keys.
    */
-  // NOTE: The needlessly complicated `S extends any ? S : S` instead of just
-  // `S` ensures that the TypeScript compiler doesn't attempt to infer `S`
-  // based on the value passed as `preloadedState`, which might be a partial
-  // state rather than the full thing.
-  preloadedState?: DeepPartial<S extends any ? S : S>
+  /* 
+  Not 100% correct but the best approximation we can get:
+  - if S is a `CombinedState` applying a second `CombinedState` on it does not change anything.
+  - if it is not, there could be two cases:
+    - `ReducersMapObject<S, A>` is being passed in. In this case, we will call `combineReducers` on it and `CombinedState<S>` is correct
+    - `Reducer<S, A>` is being passed in. In this case, actually `CombinedState<S>` is wrong and `S` would be correct.
+    As we cannot distinguish between those two cases without adding another generic paramter, 
+    we just make the pragmatic assumption that the latter almost never happens.
+  */
+  preloadedState?: PreloadedState<CombinedState<NoInfer<S>>>
 
   /**
    * The store enhancers to apply. See Redux's `createStore()`.
@@ -105,7 +111,7 @@ export interface EnhancedStore<
   M extends Middlewares<S> = Middlewares<S>
 > extends Store<S, A> {
   /**
-   * The `dispatch` method of your store, enhanced by all it's middlewares.
+   * The `dispatch` method of your store, enhanced by all its middlewares.
    *
    * @inheritdoc
    */
@@ -132,7 +138,7 @@ export function configureStore<
     middleware = curriedGetDefaultMiddleware(),
     devTools = true,
     preloadedState = undefined,
-    enhancers = undefined
+    enhancers = undefined,
   } = options || {}
 
   let rootReducer: Reducer<S, A>
@@ -147,11 +153,26 @@ export function configureStore<
     )
   }
 
-  const middlewareEnhancer = applyMiddleware(
-    ...(typeof middleware === 'function'
-      ? middleware(curriedGetDefaultMiddleware)
-      : middleware)
-  )
+  let finalMiddleware = middleware
+  if (typeof finalMiddleware === 'function') {
+    finalMiddleware = finalMiddleware(curriedGetDefaultMiddleware)
+
+    if (!IS_PRODUCTION && !Array.isArray(finalMiddleware)) {
+      throw new Error(
+        'when using a middleware builder function, an array of middleware must be returned'
+      )
+    }
+  }
+  if (
+    !IS_PRODUCTION &&
+    finalMiddleware.some((item) => typeof item !== 'function')
+  ) {
+    throw new Error(
+      'each middleware provided to configureStore must be a function'
+    )
+  }
+
+  const middlewareEnhancer = applyMiddleware(...finalMiddleware)
 
   let finalCompose = compose
 
@@ -159,7 +180,7 @@ export function configureStore<
     finalCompose = composeWithDevTools({
       // Enable capture of stack traces for dispatched Redux actions
       trace: !IS_PRODUCTION,
-      ...(typeof devTools === 'object' && devTools)
+      ...(typeof devTools === 'object' && devTools),
     })
   }
 
@@ -173,9 +194,5 @@ export function configureStore<
 
   const composedEnhancer = finalCompose(...storeEnhancers) as any
 
-  return createStore(
-    rootReducer,
-    preloadedState as DeepPartial<S>,
-    composedEnhancer
-  )
+  return createStore(rootReducer, preloadedState, composedEnhancer)
 }

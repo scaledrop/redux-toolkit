@@ -1,4 +1,9 @@
 // site configuration options.
+const { resolve } = require('path')
+const {
+  linkDocblocks,
+  transpileCodeblocks
+} = require('remark-typescript-tools')
 
 module.exports = {
   presets: [
@@ -8,7 +13,49 @@ module.exports = {
         docs: {
           path: '../docs',
           sidebarPath: require.resolve('./sidebars.json'),
-          routeBasePath: '/'
+          routeBasePath: '/',
+          include: ['{api,assets,introduction,tutorials,usage}/*.{md,mdx}'], // no other way to exclude node_modules
+          remarkPlugins: [
+            [
+              linkDocblocks,
+              {
+                extractorSettings: {
+                  tsconfig: resolve(__dirname, '../docs/tsconfig.json'),
+                  basedir: resolve(__dirname, '../src'),
+                  rootFiles: ['index.ts']
+                }
+              }
+            ],
+            [
+              transpileCodeblocks,
+              {
+                compilerSettings: {
+                  tsconfig: resolve(__dirname, '../docs/tsconfig.json'),
+                  externalResolutions: {
+                    '@reduxjs/toolkit': {
+                      resolvedPath: resolve(__dirname, '../src'),
+                      packageId: {
+                        name: '@reduxjs/toolkit',
+                        subModuleName: 'index.ts',
+                        version: '1.0'
+                      }
+                    },
+                    '@virtual/matchers': {
+                      resolvedPath: resolve(
+                        __dirname,
+                        '../docs/virtual/matchers'
+                      ),
+                      packageId: {
+                        name: '@virtual/matchers',
+                        subModuleName: 'index.ts',
+                        version: '1.0'
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          ]
         },
         theme: {
           customCss: require.resolve('./src/css/custom.css')
@@ -27,8 +74,32 @@ module.exports = {
     repoUrl: 'https://github.com/reduxjs/redux-toolkit'
   },
   themeConfig: {
+    metadatas: [{ name: 'twitter:card', content: 'summary' }],
     prism: {
       theme: require('./src/js/monokaiTheme.js')
+    },
+    image: 'img/redux-logo-landscape.png',
+    navbar: {
+      title: 'Redux Toolkit',
+      logo: {
+        alt: 'Redux Logo',
+        src: 'img/redux.svg'
+      },
+      items: [
+        {
+          to: 'introduction/getting-started',
+          label: 'Getting Started',
+          position: 'right'
+        },
+        { to: 'tutorials/overview', label: 'Tutorials', position: 'right' },
+        { to: 'usage/usage-guide', label: 'Usage Guide', position: 'right' },
+        { to: 'api/configureStore', label: 'API', position: 'right' },
+        {
+          href: 'https://github.com/reduxjs/redux-toolkit',
+          label: 'GitHub',
+          position: 'right'
+        }
+      ]
     },
     footer: {
       style: 'dark',
@@ -41,8 +112,16 @@ module.exports = {
           title: 'Docs',
           items: [
             {
-              label: 'Quick Start',
-              to: 'introduction/quick-start'
+              label: 'Getting Started',
+              to: 'introduction/getting-started'
+            },
+            {
+              label: 'Tutorials',
+              to: 'tutorials/overview'
+            },
+            {
+              label: 'Usage Guide',
+              to: 'usage/usage-guide'
             },
             {
               label: 'API Reference',
@@ -86,26 +165,6 @@ module.exports = {
       copyright: `Copyright © 2015–${new Date().getFullYear()} Dan Abramov and the Redux documentation authors.`
     },
     image: 'img/redux-logo-landscape.png',
-    navbar: {
-      title: 'Redux Toolkit',
-      logo: {
-        alt: 'Redux Logo',
-        src: 'img/redux.svg'
-      },
-      links: [
-        {
-          to: 'introduction/quick-start',
-          label: 'Quick Start',
-          position: 'right'
-        },
-        { to: 'api/configureStore', label: 'API', position: 'right' },
-        {
-          href: 'https://github.com/reduxjs/redux-toolkit',
-          label: 'GitHub',
-          position: 'right'
-        }
-      ]
-    },
     algolia: {
       apiKey: '82d838443b672336bf63cab4772d9eb4',
       indexName: 'redux-starter-kit',

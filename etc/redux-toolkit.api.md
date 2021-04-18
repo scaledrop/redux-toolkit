@@ -7,16 +7,20 @@
 import { Action } from 'redux';
 import { ActionCreator } from 'redux';
 import { AnyAction } from 'redux';
+import { CombinedState } from 'redux';
 import { default as createNextState } from 'immer';
 import { createSelector } from 'reselect';
 import { current } from 'immer';
-import { DeepPartial } from 'redux';
 import { Dispatch } from 'redux';
 import { Draft } from 'immer';
+import { freeze } from 'immer';
+import { isDraft } from 'immer';
 import { Middleware } from 'redux';
+import { original } from 'immer';
 import { OutputParametricSelector } from 'reselect';
 import { OutputSelector } from 'reselect';
 import { ParametricSelector } from 'reselect';
+import { PreloadedState } from 'redux';
 import { Reducer } from 'redux';
 import { ReducersMapObject } from 'redux';
 import { Selector } from 'reselect';
@@ -51,12 +55,18 @@ export interface ActionCreatorWithPreparedPayload<Args extends unknown[], P, T e
     (...args: Args): PayloadAction<P, T, M, E>;
 }
 
+// @public (undocumented)
+export type ActionMatchingAllOf<Matchers extends [Matcher<any>, ...Matcher<any>[]]> = UnionToIntersection<ActionMatchingAnyOf<Matchers>>;
+
+// @public (undocumented)
+export type ActionMatchingAnyOf<Matchers extends [Matcher<any>, ...Matcher<any>[]]> = ActionFromMatcher<Matchers[number]>;
+
 // @public
 export interface ActionReducerMapBuilder<State> {
     addCase<ActionCreator extends TypedActionCreator<string>>(actionCreator: ActionCreator, reducer: CaseReducer<State, ReturnType<ActionCreator>>): ActionReducerMapBuilder<State>;
     addCase<Type extends string, A extends Action<Type>>(type: Type, reducer: CaseReducer<State, A>): ActionReducerMapBuilder<State>;
     addDefaultCase(reducer: CaseReducer<State, AnyAction>): {};
-    addMatcher<A extends AnyAction>(matcher: ActionMatcher<A>, reducer: CaseReducer<State, A>): Omit<ActionReducerMapBuilder<State>, 'addCase'>;
+    addMatcher<A extends AnyAction>(matcher: ActionMatcher<A> | ((action: AnyAction) => boolean), reducer: CaseReducer<State, A>): Omit<ActionReducerMapBuilder<State>, 'addCase'>;
 }
 
 // @public @deprecated
@@ -71,17 +81,21 @@ export type AsyncThunk<Returned, ThunkArg, ThunkApiConfig extends AsyncThunkConf
 };
 
 // @public
-export type AsyncThunkAction<Returned, ThunkArg, ThunkApiConfig extends AsyncThunkConfig> = (dispatch: GetDispatch<ThunkApiConfig>, getState: () => GetState<ThunkApiConfig>, extra: GetExtra<ThunkApiConfig>) => Promise<PayloadAction<Returned, string, {
-    arg: ThunkArg;
-    requestId: string;
-}> | PayloadAction<undefined | GetRejectValue<ThunkApiConfig>, string, {
-    arg: ThunkArg;
-    requestId: string;
-    aborted: boolean;
-    condition: boolean;
-}, SerializedError>> & {
+export type AsyncThunkAction<Returned, ThunkArg, ThunkApiConfig extends AsyncThunkConfig> = (dispatch: GetDispatch<ThunkApiConfig>, getState: () => GetState<ThunkApiConfig>, extra: GetExtra<ThunkApiConfig>) => Promise<ReturnType<AsyncThunkFulfilledActionCreator<Returned, ThunkArg>> | ReturnType<AsyncThunkRejectedActionCreator<ThunkArg, ThunkApiConfig>>> & {
     abort(reason?: string): void;
+    requestId: string;
+    arg: ThunkArg;
+    unwrap(): Promise<Returned>;
 };
+
+// @public
+export interface AsyncThunkOptions<ThunkArg = void, ThunkApiConfig extends AsyncThunkConfig = {}> {
+    condition?(arg: ThunkArg, api: Pick<GetThunkAPI<ThunkApiConfig>, 'getState' | 'extra'>): boolean | undefined;
+    dispatchConditionRejection?: boolean;
+    idGenerator?: () => string;
+    // (undocumented)
+    serializeError?: (x: unknown) => GetSerializedErrorType<ThunkApiConfig>;
+}
 
 // @public
 export type AsyncThunkPayloadCreator<Returned, ThunkArg = void, ThunkApiConfig extends AsyncThunkConfig = {}> = (arg: ThunkArg, thunkAPI: GetThunkAPI<ThunkApiConfig>) => AsyncThunkPayloadCreatorReturnValue<Returned, ThunkApiConfig>;
@@ -90,7 +104,7 @@ export type AsyncThunkPayloadCreator<Returned, ThunkArg = void, ThunkApiConfig e
 export type AsyncThunkPayloadCreatorReturnValue<Returned, ThunkApiConfig extends AsyncThunkConfig> = Promise<Returned | RejectWithValue<GetRejectValue<ThunkApiConfig>>> | Returned | RejectWithValue<GetRejectValue<ThunkApiConfig>>;
 
 // @public
-export type CaseReducer<S = any, A extends Action = AnyAction> = (state: Draft<S>, action: A) => S | void;
+export type CaseReducer<S = any, A extends Action = AnyAction> = (state: Draft<S>, action: A) => S | void | Draft<S>;
 
 // @public
 export type CaseReducerActions<CaseReducers extends SliceCaseReducers<any>> = {
@@ -124,7 +138,7 @@ export interface ConfigureStoreOptions<S = any, A extends Action = AnyAction, M 
     devTools?: boolean | EnhancerOptions;
     enhancers?: StoreEnhancer[] | ConfigureEnhancersCallback;
     middleware?: ((getDefaultMiddleware: CurriedGetDefaultMiddleware<S>) => M) | M;
-    preloadedState?: DeepPartial<S extends any ? S : S>;
+    preloadedState?: PreloadedState<CombinedState<NoInfer<S>>>;
     reducer: Reducer<S, A> | ReducersMapObject<S, A>;
 }
 
@@ -136,6 +150,9 @@ export function createAction<PA extends PrepareAction<any>, T extends string = s
 
 // @public (undocumented)
 export function createAsyncThunk<Returned, ThunkArg = void, ThunkApiConfig extends AsyncThunkConfig = {}>(typePrefix: string, payloadCreator: AsyncThunkPayloadCreator<Returned, ThunkArg, ThunkApiConfig>, options?: AsyncThunkOptions<ThunkArg, ThunkApiConfig>): AsyncThunk<Returned, ThunkArg, ThunkApiConfig>;
+
+// @public
+export const createDraftSafeSelector: typeof createSelector;
 
 // @public (undocumented)
 export function createEntityAdapter<T>(options?: {
@@ -149,10 +166,10 @@ export function createImmutableStateInvariantMiddleware(options?: ImmutableState
 export { createNextState }
 
 // @public
-export function createReducer<S, CR extends CaseReducers<S, any> = CaseReducers<S, any>>(initialState: S, actionsMap: CR, actionMatchers?: ActionMatcherDescriptionCollection<S>, defaultCaseReducer?: CaseReducer<S>): Reducer<S>;
+export function createReducer<S>(initialState: S, builderCallback: (builder: ActionReducerMapBuilder<S>) => void): Reducer<S>;
 
 // @public
-export function createReducer<S>(initialState: S, builderCallback: (builder: ActionReducerMapBuilder<S>) => void): Reducer<S>;
+export function createReducer<S, CR extends CaseReducers<S, any> = CaseReducers<S, any>>(initialState: S, actionsMap: CR, actionMatchers?: ActionMatcherDescriptionCollection<S>, defaultCaseReducer?: CaseReducer<S>): Reducer<S>;
 
 export { createSelector }
 
@@ -251,6 +268,14 @@ export interface EntityStateAdapter<T> {
     // (undocumented)
     setAll<S extends EntityState<T>>(state: PreventAny<S, T>, entities: PayloadAction<T[] | Record<EntityId, T>>): S;
     // (undocumented)
+    setMany<S extends EntityState<T>>(state: PreventAny<S, T>, entities: T[] | Record<EntityId, T>): S;
+    // (undocumented)
+    setMany<S extends EntityState<T>>(state: PreventAny<S, T>, entities: PayloadAction<T[] | Record<EntityId, T>>): S;
+    // (undocumented)
+    setOne<S extends EntityState<T>>(state: PreventAny<S, T>, entity: T): S;
+    // (undocumented)
+    setOne<S extends EntityState<T>>(state: PreventAny<S, T>, action: PayloadAction<T>): S;
+    // (undocumented)
     updateMany<S extends EntityState<T>>(state: PreventAny<S, T>, updates: Update<T>[]): S;
     // (undocumented)
     updateMany<S extends EntityState<T>>(state: PreventAny<S, T>, updates: PayloadAction<Update<T>[]>): S;
@@ -269,7 +294,9 @@ export interface EntityStateAdapter<T> {
 }
 
 // @public (undocumented)
-export function findNonSerializableValue(value: unknown, path?: ReadonlyArray<string>, isSerializable?: (value: unknown) => boolean, getEntries?: (value: unknown) => [string, any][], ignoredPaths?: string[]): NonSerializableValue | false;
+export function findNonSerializableValue(value: unknown, path?: string, isSerializable?: (value: unknown) => boolean, getEntries?: (value: unknown) => [string, any][], ignoredPaths?: string[]): NonSerializableValue | false;
+
+export { freeze }
 
 // @public
 export function getDefaultMiddleware<S = any, O extends Partial<GetDefaultMiddlewareOptions> = {
@@ -294,10 +321,66 @@ export interface ImmutableStateInvariantMiddlewareOptions {
 }
 
 // @public
+export function isAllOf<Matchers extends [Matcher<any>, ...Matcher<any>[]]>(...matchers: Matchers): (action: any) => action is UnionToIntersection<ActionFromMatcher<Matchers[number]>>;
+
+// @public
+export function isAnyOf<Matchers extends [Matcher<any>, ...Matcher<any>[]]>(...matchers: Matchers): (action: any) => action is ActionFromMatcher<Matchers[number]>;
+
+// @public
+export function isAsyncThunkAction(): (action: any) => action is UnknownAsyncThunkAction;
+
+// @public
+export function isAsyncThunkAction<AsyncThunks extends [AnyAsyncThunk, ...AnyAsyncThunk[]]>(...asyncThunks: AsyncThunks): (action: any) => action is ActionsFromAsyncThunk<AsyncThunks[number]>;
+
+// @public
+export function isAsyncThunkAction(action: any): action is UnknownAsyncThunkAction;
+
+export { isDraft }
+
+// @public
+export function isFulfilled(): (action: any) => action is UnknownAsyncThunkFulfilledAction;
+
+// @public
+export function isFulfilled<AsyncThunks extends [AnyAsyncThunk, ...AnyAsyncThunk[]]>(...asyncThunks: AsyncThunks): (action: any) => action is FulfilledActionFromAsyncThunk<AsyncThunks[number]>;
+
+// @public
+export function isFulfilled(action: any): action is UnknownAsyncThunkFulfilledAction;
+
+// @public
 export function isImmutableDefault(value: unknown): boolean;
 
 // @public
+export function isPending(): (action: any) => action is UnknownAsyncThunkPendingAction;
+
+// @public
+export function isPending<AsyncThunks extends [AnyAsyncThunk, ...AnyAsyncThunk[]]>(...asyncThunks: AsyncThunks): (action: any) => action is PendingActionFromAsyncThunk<AsyncThunks[number]>;
+
+// @public
+export function isPending(action: any): action is UnknownAsyncThunkPendingAction;
+
+// @public
 export function isPlain(val: any): boolean;
+
+// @public
+export function isPlainObject(value: unknown): value is object;
+
+// @public
+export function isRejected(): (action: any) => action is UnknownAsyncThunkRejectedAction;
+
+// @public
+export function isRejected<AsyncThunks extends [AnyAsyncThunk, ...AnyAsyncThunk[]]>(...asyncThunks: AsyncThunks): (action: any) => action is RejectedActionFromAsyncThunk<AsyncThunks[number]>;
+
+// @public
+export function isRejected(action: any): action is UnknownAsyncThunkRejectedAction;
+
+// @public
+export function isRejectedWithValue(): (action: any) => action is UnknownAsyncThunkRejectedAction;
+
+// @public
+export function isRejectedWithValue<AsyncThunks extends [AnyAsyncThunk, ...AnyAsyncThunk[]]>(...asyncThunks: AsyncThunks): (action: any) => action is RejectedWithValueActionFromAsyncThunk<AsyncThunks[number]>;
+
+// @public
+export function isRejectedWithValue(action: any): action is UnknownAsyncThunkRejectedAction;
 
 // @public (undocumented)
 export class MiddlewareArray<Middlewares extends Middleware<any, any>> extends Array<Middlewares> {
@@ -311,8 +394,13 @@ export class MiddlewareArray<Middlewares extends Middleware<any, any>> extends A
     prepend<AdditionalMiddlewares extends ReadonlyArray<Middleware<any, any>>>(...items: AdditionalMiddlewares): MiddlewareArray<AdditionalMiddlewares[number] | Middlewares>;
 }
 
+// @public
+export const miniSerializeError: (value: any) => SerializedError;
+
 // @public (undocumented)
 export let nanoid: (size?: number) => string;
+
+export { original }
 
 export { OutputParametricSelector }
 
@@ -356,6 +444,7 @@ export interface SerializableStateInvariantMiddlewareOptions {
     ignoredActionPaths?: string[];
     ignoredActions?: string[];
     ignoredPaths?: string[];
+    ignoreState?: boolean;
     isSerializable?: (value: any) => boolean;
     warnAfter?: number;
 }
@@ -393,7 +482,7 @@ export { ThunkAction }
 export { ThunkDispatch }
 
 // @public (undocumented)
-export function unwrapResult<R extends ActionTypesWithOptionalErrorAction>(returned: R): PayloadForActionTypesExcludingErrorActions<R>;
+export function unwrapResult<R extends UnwrappableAction>(action: R): UnwrappedActionPayload<R>;
 
 // @public (undocumented)
 export type Update<T> = {
