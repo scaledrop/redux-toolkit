@@ -5,6 +5,8 @@ sidebar_label: TypeScript Quick Start
 hide_title: true
 ---
 
+&nbsp;
+
 # Redux Toolkit TypeScript Quick Start
 
 :::tip What You'll Learn
@@ -65,7 +67,7 @@ export type AppDispatch = typeof store.dispatch
 
 ### Define Typed Hooks
 
-While it's possible to import the `RootState` and `AppDispatch` types into each component, it's **better to create typed versions of the `useDispatch` and `useSelector` hooks for usage in your application**. . This is important for a couple reasons:
+While it's possible to import the `RootState` and `AppDispatch` types into each component, it's **better to create typed versions of the `useDispatch` and `useSelector` hooks for usage in your application**. This is important for a couple reasons:
 
 - For `useSelector`, it saves you the need to type `(state: RootState)` every time
 - For `useDispatch`, the default `Dispatch` type does not know about thunks. In order to correctly dispatch thunks, you need to use the specific customized `AppDispatch` type from the store that includes the thunk middleware types, and use that with `useDispatch`. Adding a pre-typed `useDispatch` hook keeps you from forgetting to import `AppDispatch` where it's needed.
